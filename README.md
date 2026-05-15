@@ -7,10 +7,6 @@
 基于 Electron 构建的跨平台桌面应用，纯 Python 引擎驱动。支持 PDF / Word / Excel / PPT / 图片 / TXT / CAD 全格式批量互转，内置完整 Canvas PDF 编辑器——文本编辑、矩形标注、文字改色，所见即所得。LibreOffice 可选增强，不装也能正常运行。
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)
-
-GitHub stars · License: MIT · PRs Welcome
 
 ---
 
@@ -189,11 +185,6 @@ scripts\build.bat          # 输出在 dist\ 目录
 
 ---
 
-## 📝 License
-
-MIT © 2025
-
----
 
 <p align="center">
   <sub>Built with Electron + Python · macOS design system · Dark mode ready</sub>
