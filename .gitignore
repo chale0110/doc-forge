@@ -1,0 +1,15 @@
+node_modules/
+dist/
+backend/venv/
+backend/__pycache__/
+backend/engine/__pycache__/
+backend/build/
+backend/dist/
+backend/*.spec
+uploads/*
+outputs/*
+!uploads/.gitkeep
+!outputs/.gitkeep
+.env
+*.log
+*.spec
