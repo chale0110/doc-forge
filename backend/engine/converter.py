@@ -17,8 +17,8 @@ class ConversionEngine:
     SUPPORTED_FORMATS = ['pdf', 'docx', 'xlsx', 'pptx', 'png', 'jpg', 'txt', 'dxf']
 
     def __init__(self, upload_dir: Path, output_dir: Path):
-        self.upload_dir = upload_dir
-        self.output_dir = output_dir
+        self.upload_dir = Path(upload_dir)
+        self.output_dir = Path(output_dir)
         # LibreOffice is optional — try to find it for better quality
         self.lo_available = self._detect_libreoffice()
 
@@ -100,33 +100,66 @@ class ConversionEngine:
     # ═══════════════════════════════════════════════════════
     def _conv_docx_to_pdf(self, src: Path, out: Path):
         from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import mm
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 
         doc = Document(src)
         w, h = A4
-        c = canvas.Canvas(str(out), pagesize=A4)
-        y = h - 50
+        pw = w - 100  # page width minus margins
+
+        # Build story
+        story = []
+        styles = getSampleStyleSheet()
 
         for para in doc.paragraphs:
-            text = para.text.strip()
-            if not text:
-                y -= 12
-            else:
-                c.setFont('Helvetica', 11)
-                for line in self._wrap_text(text, 90, c):
-                    if y < 50:
-                        c.showPage()
-                        c.setFont('Helvetica', 11)
-                        y = h - 50
-                    c.drawString(50, y, line)
-                    y -= 14
-                y -= 4
-            if y < 50:
-                c.showPage()
-                y = h - 50
-        c.save()
+            text = para.text
+            if not text and not para.runs:
+                story.append(Spacer(1, 10))
+                continue
+
+            # Determine alignment
+            alignment_map = {
+                WD_ALIGN_PARAGRAPH.LEFT: TA_LEFT,
+                WD_ALIGN_PARAGRAPH.CENTER: TA_CENTER,
+                WD_ALIGN_PARAGRAPH.RIGHT: TA_RIGHT,
+                WD_ALIGN_PARAGRAPH.JUSTIFY: TA_JUSTIFY,
+            }
+            align = alignment_map.get(para.alignment, TA_LEFT)
+
+            # Determine if bold
+            is_bold = False
+            for run in para.runs:
+                if run.bold:
+                    is_bold = True
+                    break
+
+            style_name = 'docx-para-b' if is_bold else 'docx-para'
+            if style_name not in styles:
+                styles.add(ParagraphStyle(
+                    style_name,
+                    fontName='Helvetica' + ('-Bold' if is_bold else ''),
+                    fontSize=11,
+                    leading=15,
+                    alignment=align,
+                ))
+
+            if not text.strip():
+                story.append(Spacer(1, 6))
+                continue
+
+            # Use paragraph rendering with proper text wrapping
+            p = Paragraph(text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'), styles[style_name])
+            story.append(p)
+            story.append(Spacer(1, 2))
+
+        # Build PDF
+        doc_builder = SimpleDocTemplate(str(out), pagesize=A4,
+                                         leftMargin=50, rightMargin=50,
+                                         topMargin=40, bottomMargin=40)
+        doc_builder.build(story)
 
     def _conv_docx_to_txt(self, src: Path, out: Path):
         from docx import Document
@@ -139,32 +172,77 @@ class ConversionEngine:
     # ═══════════════════════════════════════════════════════
     def _conv_xlsx_to_pdf(self, src: Path, out: Path):
         from openpyxl import load_workbook
-        from reportlab.lib.pagesizes import A4, A3
-        from reportlab.pdfgen import canvas
+        from openpyxl.utils import get_column_letter
+        from reportlab.lib.pagesizes import A4, A3, landscape
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
         wb = load_workbook(src, data_only=True)
         ws = wb.active
-        pg = A3 if ws.max_column > 8 else A4
-        pw, ph = pg
-        c = canvas.Canvas(str(out), pagesize=pg)
-        c.setFont('Helvetica', 8)
 
-        row_h = 16
-        col_w = (pw - 40) / max(ws.max_column, 1)
-        y = ph - 30
+        # Choose page size and orientation
+        if ws.max_column > 10:
+            pg = landscape(A3)
+        elif ws.max_column > 8:
+            pg = A3
+        else:
+            pg = A4
 
-        for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, 200), values_only=True):
-            x = 20
+        pw = pg[0] - 40  # usable width with margins
+        ph = pg[1] - 40
+
+        styles = getSampleStyleSheet()
+        cell_style = ParagraphStyle('cell-style', fontName='Helvetica', fontSize=8, leading=10, alignment=TA_LEFT)
+        header_style = ParagraphStyle('header-style', fontName='Helvetica-Bold', fontSize=9, leading=11, alignment=TA_CENTER)
+
+        # Build table data
+        data = []
+        max_row = min(ws.max_row, 500)
+        for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=max_row, values_only=True)):
+            row_data = []
             for val in row:
-                if val is not None:
-                    c.drawString(x, y, str(val)[:int(col_w / 5)])
-                x += col_w
-            y -= row_h
-            if y < 30:
-                c.showPage()
-                c.setFont('Helvetica', 8)
-                y = ph - 30
-        c.save()
+                text = str(val) if val is not None else ''
+                text = text[:200].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if row_idx == 0:
+                    row_data.append(Paragraph(text, header_style))
+                else:
+                    row_data.append(Paragraph(text, cell_style))
+            if row_data:
+                data.append(row_data)
+
+        if not data:
+            data = [['(空表格)']]
+
+        # Calculate column widths based on content
+        col_count = len(data[0])
+        base_w = pw / max(col_count, 1)
+        col_widths = [max(base_w, mm * 20) for _ in range(col_count)]
+
+        # Build table
+        tbl = Table(data, colWidths=col_widths, repeatRows=1)
+
+        # Table style
+        tbl_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.Color(0.97, 0.97, 0.98)]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ])
+        tbl.setStyle(tbl_style)
+
+        story = [tbl]
+
+        doc_builder = SimpleDocTemplate(str(out), pagesize=pg,
+                                         leftMargin=20, rightMargin=20,
+                                         topMargin=20, bottomMargin=20)
+        doc_builder.build(story)
 
     def _conv_xlsx_to_txt(self, src: Path, out: Path):
         from openpyxl import load_workbook
@@ -179,30 +257,65 @@ class ConversionEngine:
     # ═══════════════════════════════════════════════════════
     def _conv_pptx_to_pdf(self, src: Path, out: Path):
         from pptx import Presentation
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
+        from pptx.util import Inches
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Frame, PageTemplate, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
         prs = Presentation(src)
-        w, h = A4
-        c = canvas.Canvas(str(out), pagesize=A4)
+        w, h = landscape(A4)  # PPTX is often landscape
 
-        for slide in prs.slides:
-            c.setFont('Helvetica-Bold', 14)
-            c.drawString(50, h - 50, f'Slide')
-            y = h - 80
-            c.setFont('Helvetica', 10)
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('slide-title', fontName='Helvetica-Bold', fontSize=18, leading=22, alignment=TA_LEFT)
+        body_style = ParagraphStyle('slide-body', fontName='Helvetica', fontSize=12, leading=16, alignment=TA_LEFT)
+
+        story = []
+
+        for slide_num, slide in enumerate(prs.slides):
+            if slide_num > 0:
+                story.append(PageBreak())
+
+            # Slide title
+            has_title = False
+            for shape in slide.shapes:
+                if shape.is_placeholder and shape.placeholder_format.type == 1:  # TITLE
+                    t = shape.text.strip()
+                    if t:
+                        story.append(Paragraph(t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'), title_style))
+                        story.append(Spacer(1, 12))
+                        has_title = True
+                    break
+
+            if not has_title:
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for para in shape.text_frame.paragraphs:
+                            t = para.text.strip()
+                            if t and len(t) > 2:
+                                story.append(Paragraph(t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'), title_style))
+                                story.append(Spacer(1, 12))
+                                break
+                        break
+
+            # Slide body
             for shape in slide.shapes:
                 if shape.has_text_frame:
                     for para in shape.text_frame.paragraphs:
                         t = para.text.strip()
-                        if t:
-                            c.drawString(60, y, t[:100])
-                            y -= 16
-                            if y < 40:
-                                c.showPage()
-                                y = h - 50
-            c.showPage()
-        c.save()
+                        if t and not (has_title and para is slide.shapes[0].text_frame.paragraphs[0]):
+                            story.append(Paragraph(t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'), body_style))
+                            story.append(Spacer(1, 6))
+
+            story.append(Spacer(1, 20))
+
+        if not story:
+            story.append(Paragraph('(空演示文稿)', body_style))
+
+        doc_builder = SimpleDocTemplate(str(out), pagesize=(w, h),
+                                         leftMargin=50, rightMargin=50,
+                                         topMargin=40, bottomMargin=40)
+        doc_builder.build(story)
 
     def _conv_pptx_to_txt(self, src: Path, out: Path):
         from pptx import Presentation
@@ -233,12 +346,31 @@ class ConversionEngine:
     def _conv_pdf_to_docx(self, src: Path, out: Path):
         import pdfplumber
         from docx import Document
+        from docx.shared import Pt
+
         doc = Document()
+
         with pdfplumber.open(src) as pdf:
-            for page in pdf.pages:
-                t = page.extract_text()
+            for page_num, page in enumerate(pdf.pages):
+                if page_num > 0:
+                    doc.add_page_break()
+
+                # Try to extract text with layout
+                t = page.extract_text(layout=True, x_tolerance=3, y_tolerance=3)
                 if t:
-                    doc.add_paragraph(t)
+                    for line in t.split('\n'):
+                        line = line.strip()
+                        if line:
+                            p = doc.add_paragraph(line)
+                            # Use small font to match PDF look
+                            for run in p.runs:
+                                run.font.size = Pt(11)
+                else:
+                    # Fallback: extract without layout
+                    t2 = page.extract_text()
+                    if t2:
+                        doc.add_paragraph(t2.strip())
+
         doc.save(str(out))
 
     # ═══════════════════════════════════════════════════════

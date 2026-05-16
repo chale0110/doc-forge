@@ -104,6 +104,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      zoomFactor: 1.0,    // Lock browser zoom — we handle PDF zoom ourselves
     },
   };
 
@@ -121,6 +122,9 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Lock browser zoom — we handle PDF zoom ourselves in JS
+    mainWindow.webContents.setZoomFactor(1.0);
+    mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
   });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
