@@ -162,14 +162,16 @@
       <div class="toolbar-actions hidden" id="editor-toolbar">
         <div class="segmented-control">
           <button class="segment active" data-tool="select">选择</button>
+          <button class="segment" data-tool="highlight">高亮</button>
           <button class="segment" data-tool="text">文字</button>
           <button class="segment" data-tool="rect">矩形</button>
           <button class="segment" data-tool="eraser">擦除</button>
         </div>
-        <input type="color" id="editor-color" class="color-pick" value="#000000" title="文字/边框颜色">
+        <input type="color" id="editor-color" class="color-pick" value="#FFD700" title="文字/边框颜色">
         <input type="color" id="editor-fill" class="color-pick" value="#ffffff" title="填充颜色">
         <span class="toolbar-spacer"></span>
         <span id="editor-page-info" class="meta">—</span>
+        <span id="editor-zoom-pct" class="zoom-pct" title="缩放比例">100%</span>
         <span class="toolbar-spacer"></span>
         <button id="btn-editor-save" class="btn-primary small">保存</button>
       </div>
@@ -184,10 +186,10 @@
         <div id="editor-pages" class="thumb-list"></div>
       </div>
 
-      <!-- Canvas -->
+      <!-- Canvas — multi-page continuous scroll -->
       <div class="editor-canvas-area">
         <div id="editor-canvas-container" class="canvas-scroll">
-          <canvas id="editor-canvas"></canvas>
+          <div id="pages-container"></div>
         </div>
       </div>
     </div>
@@ -205,8 +207,30 @@
       </div>
     </div>
 
+    <!-- Highlight color picker popover -->
+    <div id="highlight-props-popup" class="popover hidden">
+      <p style="font-size:13px;font-weight:600;margin-bottom:8px">高亮颜色</p>
+      <div class="color-swatches">
+        <button class="swatch" style="background:#FFD700" data-color="#FFD700" title="默认黄"></button>
+        <button class="swatch" style="background:#90EE90" data-color="#90EE90" title="浅绿"></button>
+        <button class="swatch" style="background:#87CEEB" data-color="#87CEEB" title="天蓝"></button>
+        <button class="swatch" style="background:#FFB6C1" data-color="#FFB6C1" title="浅粉"></button>
+        <button class="swatch" style="background:#DDA0DD" data-color="#DDA0DD" title="梅紫"></button>
+        <button class="swatch" style="background:#F0E68C" data-color="#F0E68C" title="卡其"></button>
+        <button class="swatch" style="background:#E0E0E0" data-color="#E0E0E0" title="浅灰"></button>
+        <button class="swatch" style="background:#FFFFFF;border:1px solid #ccc" data-color="#FFFFFF" title="白色"></button>
+        <button class="swatch swatch-transparent" data-color="transparent" title="透明/移除高亮">🎨</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-tertiary);margin-top:6px">选择颜色后自动应用 · 点「透明」移除高亮</p>
+      <div class="popover-btns">
+        <button id="btn-highlight-delete" class="btn-danger small">删除高亮</button>
+        <button id="btn-highlight-close" class="btn-secondary small">关闭</button>
+      </div>
+    </div>
+
     <!-- Rect properties popover -->
     <div id="rect-props-popup" class="popover hidden">
+      <p style="font-size:13px;font-weight:600;margin-bottom:8px">矩形属性</p>
       <div class="popover-row">
         <label>边框色</label>
         <input type="color" id="rect-border-color" class="color-pick" value="#ff3b30">
@@ -214,6 +238,11 @@
       <div class="popover-row">
         <label>填充色</label>
         <input type="color" id="rect-fill-color" class="color-pick" value="#ffffff">
+      </div>
+      <div class="popover-row">
+        <label>透明度</label>
+        <input type="range" id="rect-opacity" class="opacity-slider" min="0" max="100" value="50">
+        <span id="rect-opacity-val" class="meta">50%</span>
       </div>
       <div class="popover-btns">
         <button id="btn-rect-delete" class="btn-danger small">删除</button>

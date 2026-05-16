@@ -694,6 +694,84 @@ body.macos {
 .color-pick::-webkit-color-swatch-wrapper { padding: 0; }
 .color-pick::-webkit-color-swatch { border-radius: 4px; border: 0.5px solid var(--separator-strong); }
 
+/* ── Zoom Indicator ──────────────────────────────────── */
+.zoom-pct {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: center;
+  cursor: default;
+}
+
+/* ── Color Swatches ──────────────────────────────────── */
+.color-swatches {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.swatch-transparent {
+  background: repeating-conic-gradient(#eee 0% 25%, transparent 0% 50%) 50% / 8px 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.5px solid var(--separator-strong);
+}
+
+/* ── Opacity Slider ──────────────────────────────────── */
+.opacity-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--separator-strong);
+  border-radius: 2px;
+  outline: none;
+}
+.opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sys-blue);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* ── Rect Selection Handles ──────────────────────────── */
+.rect-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: white;
+  border: 1.5px solid var(--sys-blue);
+  border-radius: 2px;
+  z-index: 10;
+  cursor: pointer;
+}
+.rect-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
+.rect-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
+.rect-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+.rect-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
+.rect-handle.n  { top: -4px; left: 50%; margin-left: -4px; cursor: n-resize; }
+.rect-handle.s  { bottom: -4px; left: 50%; margin-left: -4px; cursor: s-resize; }
+.rect-handle.e  { top: 50%; right: -4px; margin-top: -4px; cursor: e-resize; }
+.rect-handle.w  { top: 50%; left: -4px; margin-top: -4px; cursor: w-resize; }
+
 .canvas-scroll {
   flex: 1;
   overflow: auto;
@@ -703,7 +781,39 @@ body.macos {
   background: var(--separator);
 }
 
+/* ── Multi-page container ─────────────────────────────── */
+#pages-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.page-canvas {
+  display: block;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  background: white;
+}
+
+.page-num-label {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: rgba(255,255,255,0.85);
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
 #editor-canvas {
+  /* kept for compatibility with old references */
   flex-shrink: 0;
   box-shadow: 0 4px 24px rgba(0,0,0,0.18);
   background: white;

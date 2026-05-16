@@ -259,7 +259,10 @@ def pdf_parse():
 def pdf_save():
     """Save edited PDF: apply text/image changes, generate new PDF."""
     data = request.get_json()
-    src = UPLOAD_DIR / data['file_id']
+    # Check outputs dir first, then uploads
+    src = OUTPUT_DIR / data['file_id']
+    if not src.exists():
+        src = UPLOAD_DIR / data['file_id']
     edits = data.get('edits', [])  # list of edit operations
     try:
         out = pdf_ops.apply_edits(str(src), edits)
@@ -271,7 +274,10 @@ def pdf_save():
 @app.route('/api/pdf/render/<file_id>/<int:page>')
 def pdf_render_page(file_id, page):
     """Render a PDF page as PNG for display in the editor."""
-    src = UPLOAD_DIR / file_id
+    # Check outputs dir first (saved edits), then uploads dir
+    src = OUTPUT_DIR / file_id
+    if not src.exists():
+        src = UPLOAD_DIR / file_id
     if not src.exists():
         return jsonify({'error': '文件不存在'}), 404
     try:

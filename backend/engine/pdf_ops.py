@@ -29,8 +29,8 @@ class PDFOps:
     """PDF 拆分 / 合并 / 编辑"""
 
     def __init__(self, upload_dir: Path, output_dir: Path):
-        self.upload_dir = upload_dir
-        self.output_dir = output_dir
+        self.upload_dir = Path(upload_dir)
+        self.output_dir = Path(output_dir)
 
     def _out_path(self, prefix: str = 'output') -> Path:
         name = f'{prefix}_{uuid.uuid4().hex[:8]}.pdf'
@@ -179,7 +179,7 @@ class PDFOps:
                 {
                     'id': i,
                     'x': b['x'],
-                    'y': result['height'] - b['y'] - b['height'],  # flip Y for canvas
+                    'y': b['y'],  # Already top-left Y (from w['top'])
                     'width': b['width'],
                     'height': b['height'],
                     'text': b['text'],
@@ -360,6 +360,18 @@ class PDFOps:
                         edit.get('h', 50),
                         edit.get('color', '#ff0000'),
                         edit.get('fill', '#ffffff'),
+                        edit.get('opacity', 100),
+                    )
+
+            elif etype == 'add_highlight':
+                if page_num < total_pages:
+                    self._add_highlight_annotation(
+                        pdf, page_num,
+                        edit.get('x', 100),
+                        edit.get('y', 100),
+                        edit.get('width', 200),
+                        edit.get('height', 20),
+                        edit.get('color', '#FFD700'),
                     )
 
             elif etype == 'text':
@@ -413,8 +425,9 @@ class PDFOps:
         page['/Annots'].append(annotation)
 
     def _add_rect_annotation(self, pdf, page_num: int, x: float, y: float,
-                               w: float, h: float, color: str, fill: str = '#ffffff'):
-        """Add a rectangle annotation with optional fill."""
+                               w: float, h: float, color: str, fill: str = '#ffffff',
+                               opacity: int = 100):
+        """Add a rectangle annotation with optional fill and opacity (0-100)."""
         page = pdf.pages[page_num]
         page_height = float(page.MediaBox[3]) if '/MediaBox' in page else 842
         pdf_y = page_height - y
@@ -425,6 +438,9 @@ class PDFOps:
         hex_f = fill.lstrip('#')
         rf, gf, bf = tuple(int(hex_f[i:i+2], 16) / 255 for i in (0, 2, 4)) if len(hex_f) == 6 else (1, 1, 1)
 
+        # Opacity: PDF /CA (0.0 - 1.0), default 1.0 (fully opaque)
+        ca = max(0.0, min(1.0, opacity / 100.0))
+
         ann = {
             '/Type': '/Annot',
             '/Subtype': '/Square',
@@ -432,10 +448,39 @@ class PDFOps:
             '/C': pikepdf.Array([r, g, b]),
             '/F': 4,
             '/Border': pikepdf.Array([0, 0, 1]),
+            '/CA': ca,  # Transparency
         }
-        # Only add interior color if fill is not white (PDF default)
-        if fill.lower() not in ('#ffffff', '#fff', 'white', ''):
+        # Interior color (fill)
+        if ca > 0 and fill.lower() not in ('#ffffff', '#fff', 'white', '', 'none'):
             ann['/IC'] = pikepdf.Array([rf, gf, bf])
+
+        annotation = pikepdf.Dictionary(ann)
+
+        if '/Annots' not in page:
+            page['/Annots'] = pikepdf.Array()
+        page['/Annots'].append(annotation)
+
+    def _add_highlight_annotation(self, pdf, page_num: int, x: float, y: float,
+                                    width: float, height: float, color: str = '#FFD700'):
+        """Add a semi-transparent highlight rectangle (like a marker over text)."""
+        page = pdf.pages[page_num]
+        page_height = float(page.MediaBox[3]) if '/MediaBox' in page else 842
+        pdf_y = page_height - y
+
+        # Parse color
+        hex_c = color.lstrip('#')
+        r, g, b = tuple(int(hex_c[i:i+2], 16) / 255 for i in (0, 2, 4)) if len(hex_c) == 6 else (1, 1, 0)
+
+        ann = {
+            '/Type': '/Annot',
+            '/Subtype': '/Square',
+            '/Rect': pikepdf.Array([x, pdf_y - height, x + width, pdf_y]),
+            '/C': pikepdf.Array([r, g, b]),
+            '/F': 4,
+            '/Border': pikepdf.Array([0, 0, 0]),
+            '/CA': 0.4,  # Semi-transparent
+            '/IC': pikepdf.Array([r, g, b]),
+        }
 
         annotation = pikepdf.Dictionary(ann)
 
